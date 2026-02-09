@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { AuthScreen } from "@/components/auth-screen"
+import { useAuth } from "@clerk/nextjs"
 import { AppSidebar, type View } from "@/components/app-sidebar"
 import { TopHeader } from "@/components/top-header"
 import { ChannelView } from "@/components/channel-view"
@@ -10,11 +10,15 @@ import { CalendarView } from "@/components/calendar-view"
 import { CallView } from "@/components/call-view"
 
 export default function Page() {
-  const [authenticated, setAuthenticated] = useState(false)
+  const { isLoaded } = useAuth()
   const [activeView, setActiveView] = useState<View>({ type: "channel", id: "ch1" })
 
-  if (!authenticated) {
-    return <AuthScreen onLogin={() => setAuthenticated(true)} />
+  if (!isLoaded) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-sidebar-border border-t-sidebar-accent-foreground" />
+      </div>
+    )
   }
 
   return (
