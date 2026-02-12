@@ -2,25 +2,59 @@
 
 import React from "react"
 
-import { Search, Bell, Settings, Users, Hash, Calendar, Video } from "lucide-react"
+import { Search, Bell, Settings, Users, Hash, Calendar, Video, LogOut } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useClerk, useUser } from "@clerk/nextjs"
 import type { View } from "@/components/app-sidebar"
-import { channels, chats, users, currentUser } from "@/lib/mock-data"
+
+interface Channel {
+  id: string
+  name: string
+  description?: string | null
+}
+
+interface Chat {
+  id: string
+  name: string
+  isGroup: boolean
+  participants: { id: string; name: string }[]
+}
 
 interface TopHeaderProps {
   activeView: View
+  channels?: Channel[]
+  chats?: Chat[]
 }
 
-function getTitle(view: View): { icon: React.ReactNode; title: string; subtitle?: string } {
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function getTitle(
+  view: View,
+  channels: Channel[],
+  chats: Chat[]
+): { icon: React.ReactNode; title: string; subtitle?: string } {
   switch (view.type) {
     case "channel": {
       const ch = channels.find((c) => c.id === view.id)
       return {
         icon: <Hash className="h-5 w-5 text-muted-foreground" />,
         title: ch?.name || "Channel",
-        subtitle: ch?.description,
+        subtitle: ch?.description ?? undefined,
       }
     }
     case "chat": {
@@ -28,9 +62,7 @@ function getTitle(view: View): { icon: React.ReactNode; title: string; subtitle?
       return {
         icon: <Users className="h-5 w-5 text-muted-foreground" />,
         title: chat?.name || "Chat",
-        subtitle: chat?.isGroup
-          ? `${chat.participants.length} members`
-          : users.find((u) => u.id === chat?.participants.find((p) => p !== currentUser.id))?.role,
+        subtitle: chat?.isGroup ? `${chat.participants.length} members` : undefined,
       }
     }
     case "calendar":
@@ -40,8 +72,10 @@ function getTitle(view: View): { icon: React.ReactNode; title: string; subtitle?
   }
 }
 
-export function TopHeader({ activeView }: TopHeaderProps) {
-  const { icon, title, subtitle } = getTitle(activeView)
+export function TopHeader({ activeView, channels = [], chats = [] }: TopHeaderProps) {
+  const { user } = useUser()
+  const { signOut } = useClerk()
+  const { icon, title, subtitle } = getTitle(activeView, channels, chats)
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
@@ -70,11 +104,26 @@ export function TopHeader({ activeView }: TopHeaderProps) {
           <Settings className="h-4 w-4" />
           <span className="sr-only">Settings</span>
         </Button>
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            {currentUser.avatar}
-          </AvatarFallback>
-        </Avatar>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              aria-label="Account menu"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  {user ? getInitials((`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || "U")) : "U"}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/sign-in" })}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

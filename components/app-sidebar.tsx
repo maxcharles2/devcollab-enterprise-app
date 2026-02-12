@@ -1,8 +1,14 @@
 "use client"
 
-import { Hash, MessageSquare, Calendar, Video, Users, ChevronDown, Circle } from "lucide-react"
+import { Hash, Calendar, Video, Users, ChevronDown, Circle, LogOut } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { channels, chats, currentUser, users } from "@/lib/mock-data"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useClerk, useUser } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 
 export type View =
@@ -11,9 +17,30 @@ export type View =
   | { type: "calendar" }
   | { type: "call" }
 
+interface Channel {
+  id: string
+  name: string
+  description?: string | null
+}
+
+interface ChatParticipant {
+  id: string
+  name: string
+  avatar_url: string | null
+}
+
+interface Chat {
+  id: string
+  name: string
+  isGroup: boolean
+  participants: ChatParticipant[]
+}
+
 interface AppSidebarProps {
   activeView: View
   onNavigate: (view: View) => void
+  channels: Channel[]
+  chats: Chat[]
 }
 
 const statusColor: Record<string, string> = {
@@ -22,7 +49,18 @@ const statusColor: Record<string, string> = {
   offline: "text-sidebar-foreground/30",
 }
 
-export function AppSidebar({ activeView, onNavigate }: AppSidebarProps) {
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+export function AppSidebar({ activeView, onNavigate, channels, chats }: AppSidebarProps) {
+  const { user } = useUser()
+  const { signOut } = useClerk()
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
       {/* Workspace header */}
@@ -62,11 +100,6 @@ export function AppSidebar({ activeView, onNavigate }: AppSidebarProps) {
                 >
                   <Hash className="h-4 w-4 shrink-0 opacity-60" />
                   <span className="truncate">{ch.name}</span>
-                  {ch.unreadCount > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-bold text-sidebar-primary-foreground">
-                      {ch.unreadCount}
-                    </span>
-                  )}
                 </button>
               )
             })}
@@ -84,9 +117,7 @@ export function AppSidebar({ activeView, onNavigate }: AppSidebarProps) {
           <nav className="flex flex-col gap-0.5">
             {chats.map((chat) => {
               const isActive = activeView.type === "chat" && activeView.id === chat.id
-              const otherUser = !chat.isGroup
-                ? users.find((u) => chat.participants.find((p) => p !== currentUser.id) === u.id)
-                : null
+              const otherParticipant = !chat.isGroup && chat.participants[0]
               return (
                 <button
                   key={chat.id}
@@ -105,23 +136,18 @@ export function AppSidebar({ activeView, onNavigate }: AppSidebarProps) {
                     <div className="relative">
                       <Avatar className="h-5 w-5 text-[9px]">
                         <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-[9px]">
-                          {otherUser?.avatar || "??"}
+                          {otherParticipant ? getInitials(otherParticipant.name) : "??"}
                         </AvatarFallback>
                       </Avatar>
                       <Circle
                         className={cn(
                           "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 fill-current",
-                          statusColor[otherUser?.status || "offline"]
+                          statusColor.offline
                         )}
                       />
                     </div>
                   )}
                   <span className="truncate">{chat.name}</span>
-                  {chat.unreadCount > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-bold text-sidebar-primary-foreground">
-                      {chat.unreadCount}
-                    </span>
-                  )}
                 </button>
               )
             })}
@@ -168,19 +194,34 @@ export function AppSidebar({ activeView, onNavigate }: AppSidebarProps) {
       </div>
 
       {/* User footer */}
-      <div className="flex items-center gap-2 border-t border-sidebar-border px-3 py-3">
-        <div className="relative">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-              {currentUser.avatar}
-            </AvatarFallback>
-          </Avatar>
-          <Circle className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 fill-current", statusColor[currentUser.status])} />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-sidebar-accent-foreground">{currentUser.name}</span>
-          <span className="text-[11px] text-sidebar-foreground/60">{currentUser.role}</span>
-        </div>
+      <div className="border-t border-sidebar-border">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-3 py-3 hover:bg-sidebar-accent/50 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              aria-label="Account menu"
+            >
+            <div className="relative shrink-0">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                  {user ? getInitials((`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || "U")) : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <Circle className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 fill-current", statusColor.online)} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.fullName ?? "User"}</span>
+              <span className="text-[11px] text-sidebar-foreground/60 truncate">{user?.primaryEmailAddress?.emailAddress ?? ""}</span>
+            </div>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="top" className="w-56">
+          <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/sign-in" })}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       </div>
     </aside>
   )

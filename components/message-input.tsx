@@ -6,10 +6,23 @@ import { Button } from "@/components/ui/button"
 
 interface MessageInputProps {
   placeholder?: string
+  onSend?: (content: string) => void | Promise<void>
+  onError?: (error: unknown) => void
 }
 
-export function MessageInput({ placeholder = "Type a message..." }: MessageInputProps) {
+export function MessageInput({ placeholder = "Type a message...", onSend, onError }: MessageInputProps) {
   const [value, setValue] = useState("")
+
+  const handleSend = async () => {
+    const trimmed = value.trim()
+    if (!trimmed || !onSend) return
+    try {
+      await onSend(trimmed)
+      setValue("")
+    } catch (err) {
+      onError?.(err)
+    }
+  }
 
   return (
     <div className="shrink-0 border-t border-border bg-card px-4 py-3">
@@ -21,6 +34,12 @@ export function MessageInput({ placeholder = "Type a message..." }: MessageInput
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault()
+              handleSend()
+            }
+          }}
           placeholder={placeholder}
           rows={1}
           className="max-h-24 min-h-[32px] flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
@@ -30,9 +49,11 @@ export function MessageInput({ placeholder = "Type a message..." }: MessageInput
           <span className="sr-only">Emoji</span>
         </Button>
         <Button
+          type="button"
           size="icon"
           className="h-8 w-8 shrink-0"
           disabled={!value.trim()}
+          onClick={handleSend}
         >
           <Send className="h-4 w-4" />
           <span className="sr-only">Send message</span>
