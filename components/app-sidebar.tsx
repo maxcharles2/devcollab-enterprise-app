@@ -1,8 +1,14 @@
 "use client"
 
-import { Hash, Calendar, Video, Users, ChevronDown, Circle } from "lucide-react"
+import { Hash, Calendar, Video, Users, ChevronDown, Circle, LogOut } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useUser } from "@clerk/nextjs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useClerk, useUser } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 
 export type View =
@@ -54,6 +60,7 @@ function getInitials(name: string): string {
 
 export function AppSidebar({ activeView, onNavigate, channels, chats }: AppSidebarProps) {
   const { user } = useUser()
+  const { signOut } = useClerk()
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
       {/* Workspace header */}
@@ -187,19 +194,34 @@ export function AppSidebar({ activeView, onNavigate, channels, chats }: AppSideb
       </div>
 
       {/* User footer */}
-      <div className="flex items-center gap-2 border-t border-sidebar-border px-3 py-3">
-        <div className="relative">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-              {user ? getInitials((`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || "U")) : "U"}
-            </AvatarFallback>
-          </Avatar>
-          <Circle className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 fill-current", statusColor.online)} />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-sidebar-accent-foreground">{user?.fullName ?? "User"}</span>
-          <span className="text-[11px] text-sidebar-foreground/60 truncate">{user?.primaryEmailAddress?.emailAddress ?? ""}</span>
-        </div>
+      <div className="border-t border-sidebar-border">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-3 py-3 hover:bg-sidebar-accent/50 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              aria-label="Account menu"
+            >
+            <div className="relative shrink-0">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                  {user ? getInitials((`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || "U")) : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <Circle className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 fill-current", statusColor.online)} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.fullName ?? "User"}</span>
+              <span className="text-[11px] text-sidebar-foreground/60 truncate">{user?.primaryEmailAddress?.emailAddress ?? ""}</span>
+            </div>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="top" className="w-56">
+          <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/sign-in" })}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       </div>
     </aside>
   )

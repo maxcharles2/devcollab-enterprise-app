@@ -24,6 +24,7 @@ interface Chat {
 interface ChatViewProps {
   chatId: string
   chat?: Chat | null
+  currentUserProfileId?: string | null
 }
 
 const statusColor: Record<string, string> = {
@@ -41,7 +42,7 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-export function ChatView({ chatId, chat }: ChatViewProps) {
+export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) {
   const [messages, setMessages] = useState<ApiMessage[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -84,6 +85,34 @@ export function ChatView({ chatId, chat }: ChatViewProps) {
   const handleSendError = useCallback((err: unknown) => {
     console.error("Failed to send message:", err)
   }, [])
+
+  const handleEdit = useCallback(
+    async (messageId: string, content: string) => {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      })
+      if (!res.ok) {
+        throw new Error("Failed to edit message")
+      }
+      await fetchMessages()
+    },
+    [fetchMessages]
+  )
+
+  const handleDelete = useCallback(
+    async (messageId: string) => {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        throw new Error("Failed to delete message")
+      }
+      await fetchMessages()
+    },
+    [fetchMessages]
+  )
 
   const participants = chat?.participants ?? []
 
@@ -129,7 +158,12 @@ export function ChatView({ chatId, chat }: ChatViewProps) {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
         </div>
       ) : (
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          currentUserProfileId={currentUserProfileId}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
       )}
       <MessageInput placeholder={chat ? `Message ${chat.name}...` : "Type a message..."} onSend={handleSend} onError={handleSendError} />
     </div>

@@ -7,9 +7,10 @@ import type { ApiMessage } from "@/lib/types"
 
 interface ChannelViewProps {
   channelId: string
+  currentUserProfileId?: string | null
 }
 
-export function ChannelView({ channelId }: ChannelViewProps) {
+export function ChannelView({ channelId, currentUserProfileId }: ChannelViewProps) {
   const [messages, setMessages] = useState<ApiMessage[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -53,6 +54,34 @@ export function ChannelView({ channelId }: ChannelViewProps) {
     console.error("Failed to send message:", err)
   }, [])
 
+  const handleEdit = useCallback(
+    async (messageId: string, content: string) => {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      })
+      if (!res.ok) {
+        throw new Error("Failed to edit message")
+      }
+      await fetchMessages()
+    },
+    [fetchMessages]
+  )
+
+  const handleDelete = useCallback(
+    async (messageId: string) => {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        throw new Error("Failed to delete message")
+      }
+      await fetchMessages()
+    },
+    [fetchMessages]
+  )
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {loading ? (
@@ -60,7 +89,12 @@ export function ChannelView({ channelId }: ChannelViewProps) {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
         </div>
       ) : (
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          currentUserProfileId={currentUserProfileId}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
       )}
       <MessageInput placeholder="Message this channel..." onSend={handleSend} onError={handleSendError} />
     </div>

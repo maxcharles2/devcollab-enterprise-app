@@ -2,11 +2,17 @@
 
 import React from "react"
 
-import { Search, Bell, Settings, Users, Hash, Calendar, Video } from "lucide-react"
+import { Search, Bell, Settings, Users, Hash, Calendar, Video, LogOut } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useUser } from "@clerk/nextjs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useClerk, useUser } from "@clerk/nextjs"
 import type { View } from "@/components/app-sidebar"
 
 interface Channel {
@@ -68,6 +74,7 @@ function getTitle(
 
 export function TopHeader({ activeView, channels = [], chats = [] }: TopHeaderProps) {
   const { user } = useUser()
+  const { signOut } = useClerk()
   const { icon, title, subtitle } = getTitle(activeView, channels, chats)
 
   return (
@@ -97,11 +104,26 @@ export function TopHeader({ activeView, channels = [], chats = [] }: TopHeaderPr
           <Settings className="h-4 w-4" />
           <span className="sr-only">Settings</span>
         </Button>
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            {user ? getInitials((`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || "U")) : "U"}
-          </AvatarFallback>
-        </Avatar>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              aria-label="Account menu"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  {user ? getInitials((`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || "U")) : "U"}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/sign-in" })}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

@@ -33,6 +33,7 @@ export default function Page() {
   const [activeView, setActiveView] = useState<View>({ type: "channel", id: "" })
   const [channels, setChannels] = useState<Channel[]>([])
   const [chats, setChats] = useState<Chat[]>([])
+  const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/channels")
@@ -49,10 +50,17 @@ export default function Page() {
   }, [])
 
   useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((data) => setCurrentUserProfileId(data?.id ?? null))
+      .catch(() => setCurrentUserProfileId(null))
+  }, [])
+
+  useEffect(() => {
     if (channels.length > 0 && activeView.type === "channel" && !activeView.id) {
       setActiveView({ type: "channel", id: channels[0].id })
     }
-  }, [channels, activeView.type, activeView.id])
+  }, [channels, activeView.type, activeView.type === "channel" || activeView.type === "chat" ? activeView.id : ""])
 
   if (!isLoaded) {
     return (
@@ -74,12 +82,13 @@ export default function Page() {
         <TopHeader activeView={activeView} channels={channels} chats={chats} />
         <main className="flex flex-1 overflow-hidden">
           {activeView.type === "channel" && activeView.id && (
-            <ChannelView channelId={activeView.id} />
+            <ChannelView channelId={activeView.id} currentUserProfileId={currentUserProfileId} />
           )}
           {activeView.type === "chat" && activeView.id && (
             <ChatView
               chatId={activeView.id}
               chat={chats.find((c) => c.id === activeView.id)}
+              currentUserProfileId={currentUserProfileId}
             />
           )}
           {activeView.type === "calendar" && <CalendarView />}
