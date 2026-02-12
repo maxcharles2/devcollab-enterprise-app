@@ -73,12 +73,17 @@ export function ChatView({ chatId, chat }: ChatViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, chatId }),
       })
-      if (res.ok) {
-        await fetchMessages()
+      if (!res.ok) {
+        throw new Error("Failed to send message")
       }
+      await fetchMessages()
     },
     [chatId, fetchMessages]
   )
+
+  const handleSendError = useCallback((err: unknown) => {
+    console.error("Failed to send message:", err)
+  }, [])
 
   const participants = chat?.participants ?? []
 
@@ -126,7 +131,7 @@ export function ChatView({ chatId, chat }: ChatViewProps) {
       ) : (
         <MessageList messages={messages} />
       )}
-      <MessageInput placeholder={chat ? `Message ${chat.name}...` : "Type a message..."} onSend={handleSend} />
+      <MessageInput placeholder={chat ? `Message ${chat.name}...` : "Type a message..."} onSend={handleSend} onError={handleSendError} />
     </div>
   )
 }

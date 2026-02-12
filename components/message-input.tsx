@@ -7,16 +7,21 @@ import { Button } from "@/components/ui/button"
 interface MessageInputProps {
   placeholder?: string
   onSend?: (content: string) => void | Promise<void>
+  onError?: (error: unknown) => void
 }
 
-export function MessageInput({ placeholder = "Type a message...", onSend }: MessageInputProps) {
+export function MessageInput({ placeholder = "Type a message...", onSend, onError }: MessageInputProps) {
   const [value, setValue] = useState("")
 
   const handleSend = async () => {
     const trimmed = value.trim()
     if (!trimmed || !onSend) return
-    await onSend(trimmed)
-    setValue("")
+    try {
+      await onSend(trimmed)
+      setValue("")
+    } catch (err) {
+      onError?.(err)
+    }
   }
 
   return (

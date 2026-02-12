@@ -41,12 +41,17 @@ export function ChannelView({ channelId }: ChannelViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, channelId }),
       })
-      if (res.ok) {
-        await fetchMessages()
+      if (!res.ok) {
+        throw new Error("Failed to send message")
       }
+      await fetchMessages()
     },
     [channelId, fetchMessages]
   )
+
+  const handleSendError = useCallback((err: unknown) => {
+    console.error("Failed to send message:", err)
+  }, [])
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -57,7 +62,7 @@ export function ChannelView({ channelId }: ChannelViewProps) {
       ) : (
         <MessageList messages={messages} />
       )}
-      <MessageInput placeholder="Message this channel..." onSend={handleSend} />
+      <MessageInput placeholder="Message this channel..." onSend={handleSend} onError={handleSendError} />
     </div>
   )
 }
