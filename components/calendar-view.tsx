@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown, Trash2 } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown, Trash2, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,6 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
@@ -591,15 +590,33 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
                           </FormControl>
                         </PopoverTrigger>
                         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <div className="flex items-center border-b px-3">
+                            <span className="mr-2 text-muted-foreground" aria-hidden><Search className="h-4 w-4" /></span>
+                            <Input
+                              placeholder="Search by name or email…"
+                              value={participantSearch}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setParticipantSearch(val)
+                                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+                                if (!isUuid) fetchProfiles(val || undefined)
+                              }}
+                              className="flex h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                            />
+                          </div>
                           <Command
                             shouldFilter={false}
                             value={participantSearch}
                             onValueChange={(val) => {
-                              setParticipantSearch(val)
-                              fetchProfiles(val || undefined)
+                              const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+                              if (isUuid) {
+                                setParticipantSearch("")
+                              } else {
+                                setParticipantSearch(val)
+                                fetchProfiles(val || undefined)
+                              }
                             }}
                           >
-                            <CommandInput placeholder="Search by name or email…" />
                             <CommandList>
                               <CommandEmpty>No profiles found.</CommandEmpty>
                               <CommandGroup>
