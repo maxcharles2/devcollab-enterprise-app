@@ -1,12 +1,45 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { getWeekDays, users } from "@/lib/mock-data"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { getWeekDays } from "@/lib/mock-data"
+import { cn } from "@/lib/utils"
 
 const hours = Array.from({ length: 11 }, (_, i) => i + 8) // 8 AM to 6 PM
 
@@ -20,10 +53,61 @@ interface CalendarEvent {
   participants?: { id: string; name: string; avatar_url: string | null }[]
 }
 
+interface Profile {
+  id: string
+  name: string
+  avatar_url: string | null
+}
+
+const eventFormSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  eventDate: z.string().min(1, "Date is required"),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
+  color: z.string().optional(),
+  participantIds: z.array(z.string()).default([]),
+}).refine((data) => {
+  if (!data.startTime || !data.endTime) return true
+  const [sh, sm] = data.startTime.split(":").map(Number)
+  const [eh, em] = data.endTime.split(":").map(Number)
+  const startMins = sh * 60 + sm
+  const endMins = eh * 60 + em
+  return endMins > startMins
+}, { message: "End time must be after start time", path: ["endTime"] })
+
+type EventFormValues = z.infer<typeof eventFormSchema>
+
+const EVENT_COLORS = [
+  { value: "bg-primary", label: "Primary" },
+  { value: "bg-chart-1", label: "Blue" },
+  { value: "bg-chart-2", label: "Teal" },
+  { value: "bg-chart-3", label: "Purple" },
+  { value: "bg-chart-4", label: "Orange" },
+  { value: "bg-chart-5", label: "Pink" },
+]
+
 function getWeekEndDate(weekStart: string): string {
   const d = new Date(weekStart)
   d.setDate(d.getDate() + 6)
   return d.toISOString().split("T")[0]
+}
+
+function getDefaultDate(weekStart: string): string {
+  return weekStart
+}
+
+function getDefaultTimes(): { start: string; end: string } {
+  const now = new Date()
+  const h = now.getHours()
+  const m = now.getMinutes()
+  const start = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+  const endH = m >= 30 ? h + 1 : h
+  const endM = m >= 30 ? 0 : m + 30
+  return {
+    start,
+    end: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
+  }
 }
 
 export function CalendarView() {
@@ -32,7 +116,27 @@ export function CalendarView() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [selectedProfiles, setSelectedProfiles] = useState<Profile[]>([])
+  const [participantOpen, setParticipantOpen] = useState(false)
+  const [participantSearch, setParticipantSearch] = useState("")
   const days = getWeekDays(weekStart)
+  const defaultTimes = getDefaultTimes()
+
+  const form = useForm<EventFormValues>({
+    resolver: zodResolver(eventFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      eventDate: getDefaultDate(weekStart),
+      startTime: defaultTimes.start,
+      endTime: defaultTimes.end,
+      color: "bg-primary",
+      participantIds: [],
+    },
+  })
+
+  const selectedParticipantIds = form.watch("participantIds")
 
   function fetchEvents() {
     setLoading(true)
@@ -86,6 +190,61 @@ export function CalendarView() {
       cancelled = true
     }
   }, [weekStart])
+
+  const fetchProfiles = useCallback(async (search?: string) => {
+    const url = search
+      ? `/api/profiles?q=${encodeURIComponent(search)}`
+      : "/api/profiles"
+    const res = await fetch(url)
+    if (!res.ok) return
+    const data = await res.json()
+    setProfiles(Array.isArray(data) ? data : [])
+  }, [])
+
+  useEffect(() => {
+    if (showModal) {
+      fetchProfiles()
+      setSelectedProfiles([])
+      setParticipantSearch("")
+      form.reset({
+        title: "",
+        description: "",
+        eventDate: getDefaultDate(weekStart),
+        startTime: getDefaultTimes().start,
+        endTime: getDefaultTimes().end,
+        color: "bg-primary",
+        participantIds: [],
+      })
+    }
+  }, [showModal, weekStart, fetchProfiles, form])
+
+  async function onSubmit(values: EventFormValues) {
+    try {
+      const res = await fetch("/api/calendar/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: values.title,
+          description: values.description || undefined,
+          eventDate: values.eventDate,
+          startTime: values.startTime,
+          endTime: values.endTime,
+          color: values.color || undefined,
+          participantIds: values.participantIds,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to create event")
+        return
+      }
+      toast.success("Meeting scheduled successfully")
+      setShowModal(false)
+      fetchEvents()
+    } catch {
+      toast.error("Failed to create event")
+    }
+  }
 
   function shiftWeek(dir: number) {
     const d = new Date(weekStart)
@@ -212,43 +371,212 @@ export function CalendarView() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); setShowModal(false) }}>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-card-foreground">Meeting title</Label>
-                <Input placeholder="Sprint retrospective" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-card-foreground">Date</Label>
-                <Input type="date" defaultValue="2026-02-09" />
-              </div>
-              <div className="flex gap-3">
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label className="text-card-foreground">Start time</Label>
-                  <Input type="time" defaultValue="10:00" />
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-card-foreground">Meeting title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Sprint retrospective" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-card-foreground">Description (optional)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Add meeting notes or agenda…" className="min-h-[60px]" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="eventDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-card-foreground">Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex gap-3">
+                  <FormField
+                    control={form.control}
+                    name="startTime"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-card-foreground">Start time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="endTime"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-card-foreground">End time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label className="text-card-foreground">End time</Label>
-                  <Input type="time" defaultValue="11:00" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-card-foreground">Participants</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {users.slice(1, 5).map((u) => (
-                    <div key={u.id} className="flex items-center gap-1 rounded-full bg-muted px-2 py-1">
-                      <Avatar className="h-5 w-5">
-                        <AvatarFallback className="bg-secondary text-secondary-foreground text-[9px]">{u.avatar}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs text-muted-foreground">{u.name.split(" ")[0]}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <Button type="submit" className="mt-2 w-full gap-1.5">
-                <Clock className="h-4 w-4" />
-                Book Meeting
-              </Button>
-            </form>
+                <FormField
+                  control={form.control}
+                  name="color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-card-foreground">Color</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select color" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {EVENT_COLORS.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="participantIds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-card-foreground">Participants</FormLabel>
+                      <Popover open={participantOpen} onOpenChange={setParticipantOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={participantOpen}
+                              className="w-full justify-between font-normal"
+                            >
+                              {field.value.length === 0
+                                ? "Select participants…"
+                                : `${field.value.length} selected`}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command
+                            shouldFilter={false}
+                            value={participantSearch}
+                            onValueChange={(val) => {
+                              setParticipantSearch(val)
+                              fetchProfiles(val || undefined)
+                            }}
+                          >
+                            <CommandInput placeholder="Search by name or email…" />
+                            <CommandList>
+                              <CommandEmpty>No profiles found.</CommandEmpty>
+                              <CommandGroup>
+                                {profiles.map((p) => {
+                                  const isSelected = field.value.includes(p.id)
+                                  return (
+                                    <CommandItem
+                                      key={p.id}
+                                      value={p.id}
+                                      onSelect={() => {
+                                        const next = isSelected
+                                          ? field.value.filter((id) => id !== p.id)
+                                          : [...field.value, p.id]
+                                        field.onChange(next)
+                                        if (isSelected) {
+                                          setSelectedProfiles((prev) => prev.filter((sp) => sp.id !== p.id))
+                                        } else {
+                                          setSelectedProfiles((prev) => (prev.some((sp) => sp.id === p.id) ? prev : [...prev, p]))
+                                        }
+                                      }}
+                                    >
+                                      <Check className={cn("mr-2 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
+                                      <Avatar className="h-6 w-6 mr-2">
+                                        <AvatarFallback className="bg-secondary text-secondary-foreground text-[10px]">
+                                          {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      {p.name}
+                                    </CommandItem>
+                                  )
+                                })}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      {field.value.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {field.value.map((id) => {
+                            const p = profiles.find((pr) => pr.id === id) ?? selectedProfiles.find((pr) => pr.id === id)
+                            if (!p) return null
+                            return (
+                              <div
+                                key={id}
+                                className="flex items-center gap-1 rounded-full bg-muted px-2 py-1"
+                              >
+                                <Avatar className="h-5 w-5">
+                                  <AvatarFallback className="bg-secondary text-secondary-foreground text-[9px]">
+                                    {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-muted-foreground">{p.name.split(" ")[0]}</span>
+                                <button
+                                  type="button"
+                                  className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                                  onClick={() => {
+                                    field.onChange(field.value.filter((i) => i !== id))
+                                    setSelectedProfiles((prev) => prev.filter((sp) => sp.id !== id))
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="mt-2 w-full gap-1.5" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  Book Meeting
+                </Button>
+              </form>
+            </Form>
           </div>
         </div>
       )}
