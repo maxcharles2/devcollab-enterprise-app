@@ -91,7 +91,7 @@ export default function Page() {
               currentUserProfileId={currentUserProfileId}
             />
           )}
-          {activeView.type === "calendar" && <CalendarView />}
+          {activeView.type === "calendar" && <CalendarView currentUserProfileId={currentUserProfileId} />}
           {activeView.type === "call" && <CallView />}
         </main>
       </div>
