@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { getWeekDays } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 
@@ -46,10 +56,12 @@ const hours = Array.from({ length: 11 }, (_, i) => i + 8) // 8 AM to 6 PM
 interface CalendarEvent {
   id: string
   title: string
+  description?: string | null
   event_date: string
   start_time: string
   end_time: string
   color: string | null
+  created_by: string | null
   participants?: { id: string; name: string; avatar_url: string | null }[]
 }
 
@@ -110,9 +122,16 @@ function getDefaultTimes(): { start: string; end: string } {
   }
 }
 
-export function CalendarView() {
+interface CalendarViewProps {
+  currentUserProfileId?: string | null
+}
+
+export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
   const [weekStart, setWeekStart] = useState("2026-02-09")
   const [showModal, setShowModal] = useState(false)
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -206,43 +225,124 @@ export function CalendarView() {
       fetchProfiles()
       setSelectedProfiles([])
       setParticipantSearch("")
-      form.reset({
-        title: "",
-        description: "",
-        eventDate: getDefaultDate(weekStart),
-        startTime: getDefaultTimes().start,
-        endTime: getDefaultTimes().end,
-        color: "bg-primary",
-        participantIds: [],
-      })
+      if (!editingEventId) {
+        form.reset({
+          title: "",
+          description: "",
+          eventDate: getDefaultDate(weekStart),
+          startTime: getDefaultTimes().start,
+          endTime: getDefaultTimes().end,
+          color: "bg-primary",
+          participantIds: [],
+        })
+      }
     }
-  }, [showModal, weekStart, fetchProfiles, form])
+  }, [showModal, weekStart, editingEventId, fetchProfiles, form])
+
+  async function openEventForEdit(ev: CalendarEvent) {
+    try {
+      const res = await fetch(`/api/calendar/events/${ev.id}`)
+      if (!res.ok) {
+        toast.error("Failed to load event")
+        return
+      }
+      const data = await res.json()
+      form.reset({
+        title: data.title,
+        description: data.description ?? "",
+        eventDate: data.event_date,
+        startTime: data.start_time,
+        endTime: data.end_time,
+        color: data.color ?? "bg-primary",
+        participantIds: (data.participants ?? []).map((p: { id: string }) => p.id),
+      })
+      setEditingEventId(ev.id)
+      setShowModal(true)
+    } catch {
+      toast.error("Failed to load event")
+    }
+  }
+
+  function closeModal() {
+    setShowModal(false)
+    setEditingEventId(null)
+  }
 
   async function onSubmit(values: EventFormValues) {
     try {
-      const res = await fetch("/api/calendar/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: values.title,
-          description: values.description || undefined,
-          eventDate: values.eventDate,
-          startTime: values.startTime,
-          endTime: values.endTime,
-          color: values.color || undefined,
-          participantIds: values.participantIds,
-        }),
+      if (editingEventId) {
+        const res = await fetch(`/api/calendar/events/${editingEventId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: values.title,
+            description: values.description || undefined,
+            eventDate: values.eventDate,
+            startTime: values.startTime,
+            endTime: values.endTime,
+            color: values.color || undefined,
+            participantIds: values.participantIds,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          toast.error(data.error ?? "Failed to update event")
+          return
+        }
+        toast.success("Meeting updated successfully")
+        closeModal()
+      } else {
+        const res = await fetch("/api/calendar/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: values.title,
+            description: values.description || undefined,
+            eventDate: values.eventDate,
+            startTime: values.startTime,
+            endTime: values.endTime,
+            color: values.color || undefined,
+            participantIds: values.participantIds,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          toast.error(data.error ?? "Failed to create event")
+          return
+        }
+        toast.success("Meeting scheduled successfully")
+        closeModal()
+      }
+      fetchEvents()
+    } catch {
+      toast.error(editingEventId ? "Failed to update event" : "Failed to create event")
+    }
+  }
+
+  function requestDelete(eventId: string) {
+    setDeleteTargetId(eventId)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTargetId) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/calendar/events/${deleteTargetId}`, {
+        method: "DELETE",
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error ?? "Failed to create event")
+        toast.error(data.error ?? "Failed to delete event")
         return
       }
-      toast.success("Meeting scheduled successfully")
-      setShowModal(false)
+      toast.success("Meeting deleted")
+      closeModal()
+      setDeleteTargetId(null)
       fetchEvents()
     } catch {
-      toast.error("Failed to create event")
+      toast.error("Failed to delete event")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -269,7 +369,7 @@ export function CalendarView() {
             <span className="sr-only">Next week</span>
           </Button>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setShowModal(true)}>
+        <Button size="sm" className="gap-1.5" onClick={() => { setEditingEventId(null); setShowModal(true); }}>
           <Plus className="h-4 w-4" />
           New Meeting
         </Button>
@@ -341,16 +441,18 @@ export function CalendarView() {
                       const heightPx = ((endH - startH) * 60 + (endM - startM)) / 60 * 64
                       const colorClass = ev.color || "bg-primary"
                       return (
-                        <div
+                        <button
                           key={ev.id}
-                          className={`absolute inset-x-1 rounded-md ${colorClass} px-1.5 py-1 text-primary-foreground overflow-hidden`}
+                          type="button"
+                          className={`absolute inset-x-1 rounded-md ${colorClass} px-1.5 py-1 text-primary-foreground overflow-hidden text-left cursor-pointer hover:opacity-90 transition-opacity`}
                           style={{ top: `${topPx}px`, height: `${Math.max(heightPx, 24)}px` }}
+                          onClick={() => openEventForEdit(ev)}
                         >
                           <p className="truncate text-[11px] font-semibold leading-tight">{ev.title}</p>
                           <p className="truncate text-[10px] opacity-80">
                             {ev.start_time} - {ev.end_time}
                           </p>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>
@@ -361,13 +463,15 @@ export function CalendarView() {
         </div>
       )}
 
-      {/* Schedule Meeting Modal */}
+      {/* Schedule / Edit Meeting Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40">
           <div className="mx-4 w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-card-foreground">Schedule Meeting</h2>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setShowModal(false)}>
+              <h2 className="text-lg font-semibold text-card-foreground">
+                {editingEventId ? "Edit Meeting" : "Schedule Meeting"}
+              </h2>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={closeModal}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -567,19 +671,62 @@ export function CalendarView() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="mt-2 w-full gap-1.5" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Clock className="h-4 w-4" />
+                <div className="mt-2 flex flex-col gap-2">
+                  {editingEventId && currentUserProfileId && events.some((e) => e.id === editingEventId && e.created_by === currentUserProfileId) && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="w-full gap-1.5"
+                      disabled={isDeleting}
+                      onClick={() => requestDelete(editingEventId)}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      Delete Meeting
+                    </Button>
                   )}
-                  Book Meeting
-                </Button>
+                  <Button type="submit" className="w-full gap-1.5" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Clock className="h-4 w-4" />
+                    )}
+                    {editingEventId ? "Update Meeting" : "Book Meeting"}
+                  </Button>
+                </div>
               </form>
             </Form>
           </div>
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete meeting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The meeting will be removed from all participants&apos; calendars.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                confirmDelete()
+              }}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
