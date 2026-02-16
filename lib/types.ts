@@ -1,3 +1,12 @@
+// File attachment (from file_attachments table)
+export interface FileAttachment {
+  id: string
+  name: string
+  type: 'image' | 'doc' | 'pdf' | 'pptx' | 'xlsx'
+  size: string
+  storage_path: string
+}
+
 // API message shape from GET /api/messages
 export interface ApiMessage {
   id: string
@@ -8,6 +17,7 @@ export interface ApiMessage {
     name: string
     avatar_url: string | null
   } | null
+  file_attachment: FileAttachment | null
 }
 
 // Calendar event participant (from API response)
