@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { MessageList } from "@/components/message-list"
-import { MessageInput } from "@/components/message-input"
+import { MessageInput, type PendingAttachment } from "@/components/message-input"
 import type { ApiMessage } from "@/lib/types"
 
 interface ChannelViewProps {
@@ -36,11 +36,11 @@ export function ChannelView({ channelId, currentUserProfileId }: ChannelViewProp
   }, [fetchMessages])
 
   const handleSend = useCallback(
-    async (content: string) => {
+    async (content: string, attachment?: PendingAttachment) => {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, channelId }),
+        body: JSON.stringify({ content, channelId, ...(attachment && { attachment }) }),
       })
       if (!res.ok) {
         throw new Error("Failed to send message")
