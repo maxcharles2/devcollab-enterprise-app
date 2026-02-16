@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { MessageList } from "@/components/message-list"
-import { MessageInput } from "@/components/message-input"
+import { MessageInput, type PendingAttachment } from "@/components/message-input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Circle } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -68,11 +68,11 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
   }, [fetchMessages])
 
   const handleSend = useCallback(
-    async (content: string) => {
+    async (content: string, attachment?: PendingAttachment) => {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, chatId }),
+        body: JSON.stringify({ content, chatId, ...(attachment && { attachment }) }),
       })
       if (!res.ok) {
         throw new Error("Failed to send message")
