@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { FilePreviewCard } from "@/components/file-preview-card"
 import type { ApiMessage } from "@/lib/types"
 
 interface MessageListProps {
@@ -181,9 +182,17 @@ export function MessageList({ messages, currentUserProfileId, onEdit, onDelete }
                       Cancel
                     </Button>
                   </div>
+                  {msg.file_attachment && (
+                    <FilePreviewCard file={msg.file_attachment} />
+                  )}
                 </div>
               ) : (
-                <p className="text-sm leading-relaxed text-foreground/90">{msg.content}</p>
+                <>
+                  <p className="text-sm leading-relaxed text-foreground/90">{msg.content}</p>
+                  {msg.file_attachment && (
+                    <FilePreviewCard file={msg.file_attachment} />
+                  )}
+                </>
               )}
             </div>
           </div>
