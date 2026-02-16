@@ -36,11 +36,14 @@ export default function Page() {
   const [chats, setChats] = useState<Chat[]>([])
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null)
 
-  const refreshChats = useCallback(() => {
-    fetch("/api/chats")
-      .then((r) => r.json())
-      .then((data) => setChats(Array.isArray(data) ? data : []))
-      .catch(() => setChats([]))
+  const refreshChats = useCallback(async () => {
+    try {
+      const r = await fetch("/api/chats")
+      const data = await r.json()
+      setChats(Array.isArray(data) ? data : [])
+    } catch {
+      setChats([])
+    }
   }, [])
 
   const onStartDM = useCallback(
@@ -56,7 +59,7 @@ export default function Page() {
         throw new Error(err.error ?? "Failed to create DM")
       }
       const chat = await res.json()
-      refreshChats()
+      await refreshChats()
       setActiveView({ type: "chat", id: chat.id })
     },
     [refreshChats]
@@ -105,7 +108,7 @@ export default function Page() {
         currentUserProfileId={currentUserProfileId}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <TopHeader activeView={activeView} channels={channels} chats={chats} />
+        <TopHeader activeView={activeView} channels={channels} chats={chats} currentUserProfileId={currentUserProfileId} />
         <main className="flex flex-1 overflow-hidden">
           {activeView.type === "channel" && activeView.id && (
             <ChannelView channelId={activeView.id} currentUserProfileId={currentUserProfileId} />

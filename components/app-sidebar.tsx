@@ -262,7 +262,11 @@ export function AppSidebar({ activeView, onNavigate, channels, chats, onStartDM,
           <nav className="flex flex-col gap-0.5">
             {chats.map((chat) => {
               const isActive = activeView.type === "chat" && activeView.id === chat.id
-              const otherParticipant = !chat.isGroup && chat.participants[0]
+              const otherParticipant = !chat.isGroup
+                ? chat.participants.find((p) => p.id !== currentUserProfileId) ?? chat.participants[0]
+                : undefined
+              const displayName =
+                chat.name ?? (otherParticipant?.name ?? "Direct Message")
               return (
                 <button
                   key={chat.id}
@@ -292,7 +296,7 @@ export function AppSidebar({ activeView, onNavigate, channels, chats, onStartDM,
                       />
                     </div>
                   )}
-                  <span className="truncate">{chat.name}</span>
+                  <span className="truncate">{displayName}</span>
                 </button>
               )
             })}
