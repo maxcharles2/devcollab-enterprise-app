@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import type { FileAttachment } from '@/lib/types'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -32,6 +33,13 @@ export async function GET(request: NextRequest) {
         id,
         name,
         avatar_url
+      ),
+      file_attachments (
+        id,
+        name,
+        type,
+        size,
+        storage_path
       )
     `
     )
@@ -54,12 +62,26 @@ export async function GET(request: NextRequest) {
   }
 
   // Normalize sender shape (Supabase returns array for single relation)
-  const messages = (data ?? []).map((m) => ({
-    id: m.id,
-    content: m.content,
-    created_at: m.created_at,
-    sender: Array.isArray(m.sender) ? m.sender[0] : m.sender,
-  }))
+  // file_attachments is one-to-many; take first for file_attachment
+  const messages = (data ?? []).map((m) => {
+    const attachments = m.file_attachments as Array<{ id: string; name: string; type: string; size: string; storage_path: string }> | null
+    const firstAttachment = attachments?.[0]
+    return {
+      id: m.id,
+      content: m.content,
+      created_at: m.created_at,
+      sender: Array.isArray(m.sender) ? m.sender[0] : m.sender,
+      file_attachment: firstAttachment
+        ? {
+            id: firstAttachment.id,
+            name: firstAttachment.name,
+            type: firstAttachment.type as FileAttachment['type'],
+            size: firstAttachment.size,
+            storage_path: firstAttachment.storage_path,
+          }
+        : null,
+    }
+  })
 
   return NextResponse.json(messages)
 }
@@ -72,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { content, channelId, chatId } = body
+    const { content, channelId, chatId, attachment } = body
 
     if (!content || typeof content !== 'string') {
       return NextResponse.json(
@@ -147,9 +169,11 @@ export async function POST(request: NextRequest) {
       insertPayload.chat_id = chatId
     }
 
-    const { error: insertMsgError } = await supabaseAdmin
+    const { data: insertedMessage, error: insertMsgError } = await supabaseAdmin
       .from('messages')
       .insert(insertPayload)
+      .select('id')
+      .single()
 
     if (insertMsgError) {
       console.error('Failed to insert message:', insertMsgError)
@@ -157,6 +181,31 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to send message' },
         { status: 500 }
       )
+    }
+
+    const allowedTypes = ['image', 'doc', 'pdf', 'pptx', 'xlsx'] as const
+    if (attachment && insertedMessage?.id) {
+      const { storagePath, name, type, size } = attachment
+      const isValidType = typeof type === 'string' && allowedTypes.includes(type as (typeof allowedTypes)[number])
+      if (storagePath && name && isValidType && size != null) {
+        const { error: attachError } = await supabaseAdmin
+          .from('file_attachments')
+          .insert({
+            message_id: insertedMessage.id,
+            name,
+            type,
+            size: String(size),
+            storage_path: storagePath,
+          })
+
+        if (attachError) {
+          console.error('Failed to insert file attachment:', attachError)
+          return NextResponse.json(
+            { error: 'Failed to attach file' },
+            { status: 500 }
+          )
+        }
+      }
     }
 
     return NextResponse.json({ success: true })
