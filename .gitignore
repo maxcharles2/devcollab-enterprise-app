@@ -10,6 +10,7 @@ node_modules/
 .next/
 .env*.local
 .DS_Store
+.cursor/
 
 # Local plans (keep agents in sync; not pushed)
 plans/
