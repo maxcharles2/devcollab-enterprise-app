@@ -17,6 +17,8 @@ interface MessageInputProps {
   onError?: (error: unknown) => void
   /** Called when user types (debounce handled by parent/hook) */
   onTyping?: () => void
+  /** Called when user sends a message - use to clear typing status */
+  onClearTyping?: () => void
   /** Typing indicator label, e.g. "Alice is typing..." - only shown when truthy */
   typingLabel?: string | null
 }
@@ -29,7 +31,7 @@ const fileIcons: Record<string, React.ReactNode> = {
   xlsx: <FileSpreadsheet className="h-5 w-5 text-chart-2" />,
 }
 
-export function MessageInput({ placeholder = "Type a message...", onSend, onError, onTyping, typingLabel }: MessageInputProps) {
+export function MessageInput({ placeholder = "Type a message...", onSend, onError, onTyping, onClearTyping, typingLabel }: MessageInputProps) {
   const [value, setValue] = useState("")
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -38,6 +40,7 @@ export function MessageInput({ placeholder = "Type a message...", onSend, onErro
   const handleSend = async () => {
     const trimmed = value.trim()
     if ((!trimmed && !pendingAttachment) || !onSend) return
+    onClearTyping?.()
     try {
       await onSend(trimmed || "", pendingAttachment ?? undefined)
       setValue("")

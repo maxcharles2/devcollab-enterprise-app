@@ -226,6 +226,7 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
         onSend={handleSend}
         onError={handleSendError}
         onTyping={sendTyping}
+        onClearTyping={clearTyping}
         typingLabel={typingLabel}
       />
     </div>
