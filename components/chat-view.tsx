@@ -115,6 +115,11 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
   )
 
   const participants = chat?.participants ?? []
+  const displayName =
+    chat?.name ??
+    (!chat?.isGroup && currentUserProfileId
+      ? participants.find((p) => p.id !== currentUserProfileId)?.name ?? "Direct Message"
+      : "Chat")
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -137,7 +142,7 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
             )}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-card-foreground">{chat.name}</span>
+            <span className="text-sm font-medium text-card-foreground">{displayName}</span>
             <div className="flex items-center gap-1">
               {!chat.isGroup && participants[0] && (
                 <>
@@ -165,7 +170,7 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
           onDelete={handleDelete}
         />
       )}
-      <MessageInput placeholder={chat ? `Message ${chat.name}...` : "Type a message..."} onSend={handleSend} onError={handleSendError} />
+      <MessageInput placeholder={chat ? `Message ${displayName}...` : "Type a message..."} onSend={handleSend} onError={handleSendError} />
     </div>
   )
 }

@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@clerk/nextjs"
+import { toast } from "sonner"
 import { AppSidebar, type View } from "@/components/app-sidebar"
 import { TopHeader } from "@/components/top-header"
 import { ChannelView } from "@/components/channel-view"
@@ -35,6 +36,35 @@ export default function Page() {
   const [chats, setChats] = useState<Chat[]>([])
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null)
 
+  const refreshChats = useCallback(async () => {
+    try {
+      const r = await fetch("/api/chats")
+      const data = await r.json()
+      setChats(Array.isArray(data) ? data : [])
+    } catch {
+      setChats([])
+    }
+  }, [])
+
+  const onStartDM = useCallback(
+    async (targetUserId: string) => {
+      const res = await fetch("/api/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error ?? "Failed to create DM")
+        throw new Error(err.error ?? "Failed to create DM")
+      }
+      const chat = await res.json()
+      await refreshChats()
+      setActiveView({ type: "chat", id: chat.id })
+    },
+    [refreshChats]
+  )
+
   useEffect(() => {
     fetch("/api/channels")
       .then((r) => r.json())
@@ -43,11 +73,8 @@ export default function Page() {
   }, [])
 
   useEffect(() => {
-    fetch("/api/chats")
-      .then((r) => r.json())
-      .then((data) => setChats(Array.isArray(data) ? data : []))
-      .catch(() => setChats([]))
-  }, [])
+    refreshChats()
+  }, [refreshChats])
 
   useEffect(() => {
     fetch("/api/me")
@@ -77,9 +104,11 @@ export default function Page() {
         onNavigate={setActiveView}
         channels={channels}
         chats={chats}
+        onStartDM={onStartDM}
+        currentUserProfileId={currentUserProfileId}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <TopHeader activeView={activeView} channels={channels} chats={chats} />
+        <TopHeader activeView={activeView} channels={channels} chats={chats} currentUserProfileId={currentUserProfileId} />
         <main className="flex flex-1 overflow-hidden">
           {activeView.type === "channel" && activeView.id && (
             <ChannelView channelId={activeView.id} currentUserProfileId={currentUserProfileId} />

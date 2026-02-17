@@ -32,6 +32,7 @@ interface TopHeaderProps {
   activeView: View
   channels?: Channel[]
   chats?: Chat[]
+  currentUserProfileId?: string | null
 }
 
 function getInitials(name: string): string {
@@ -46,7 +47,8 @@ function getInitials(name: string): string {
 function getTitle(
   view: View,
   channels: Channel[],
-  chats: Chat[]
+  chats: Chat[],
+  currentUserProfileId?: string | null
 ): { icon: React.ReactNode; title: string; subtitle?: string } {
   switch (view.type) {
     case "channel": {
@@ -59,9 +61,14 @@ function getTitle(
     }
     case "chat": {
       const chat = chats.find((c) => c.id === view.id)
+      const displayName =
+        chat?.name ??
+        (!chat?.isGroup && currentUserProfileId
+          ? chat?.participants?.find((p) => p.id !== currentUserProfileId)?.name ?? "Direct Message"
+          : "Chat")
       return {
         icon: <Users className="h-5 w-5 text-muted-foreground" />,
-        title: chat?.name || "Chat",
+        title: displayName,
         subtitle: chat?.isGroup ? `${chat.participants.length} members` : undefined,
       }
     }
@@ -72,10 +79,10 @@ function getTitle(
   }
 }
 
-export function TopHeader({ activeView, channels = [], chats = [] }: TopHeaderProps) {
+export function TopHeader({ activeView, channels = [], chats = [], currentUserProfileId }: TopHeaderProps) {
   const { user } = useUser()
   const { signOut } = useClerk()
-  const { icon, title, subtitle } = getTitle(activeView, channels, chats)
+  const { icon, title, subtitle } = getTitle(activeView, channels, chats, currentUserProfileId)
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
