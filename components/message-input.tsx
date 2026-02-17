@@ -15,6 +15,12 @@ interface MessageInputProps {
   placeholder?: string
   onSend?: (content: string, attachment?: PendingAttachment) => void | Promise<void>
   onError?: (error: unknown) => void
+  /** Called when user types (debounce handled by parent/hook) */
+  onTyping?: () => void
+  /** Called when user sends a message - use to clear typing status */
+  onClearTyping?: () => void
+  /** Typing indicator label, e.g. "Alice is typing..." - only shown when truthy */
+  typingLabel?: string | null
 }
 
 const fileIcons: Record<string, React.ReactNode> = {
@@ -25,7 +31,7 @@ const fileIcons: Record<string, React.ReactNode> = {
   xlsx: <FileSpreadsheet className="h-5 w-5 text-chart-2" />,
 }
 
-export function MessageInput({ placeholder = "Type a message...", onSend, onError }: MessageInputProps) {
+export function MessageInput({ placeholder = "Type a message...", onSend, onError, onTyping, onClearTyping, typingLabel }: MessageInputProps) {
   const [value, setValue] = useState("")
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -34,6 +40,7 @@ export function MessageInput({ placeholder = "Type a message...", onSend, onErro
   const handleSend = async () => {
     const trimmed = value.trim()
     if ((!trimmed && !pendingAttachment) || !onSend) return
+    onClearTyping?.()
     try {
       await onSend(trimmed || "", pendingAttachment ?? undefined)
       setValue("")
@@ -125,7 +132,10 @@ export function MessageInput({ placeholder = "Type a message...", onSend, onErro
         </Button>
         <textarea
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value)
+            onTyping?.()
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault()
@@ -151,10 +161,12 @@ export function MessageInput({ placeholder = "Type a message...", onSend, onErro
           <span className="sr-only">Send message</span>
         </Button>
       </div>
-      <div className="mt-1.5 flex items-center gap-1 px-1">
-        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/40" />
-        <span className="text-[11px] text-muted-foreground/60">Sam Chen is typing...</span>
-      </div>
+      {typingLabel && (
+        <div className="mt-1.5 flex items-center gap-1 px-1">
+          <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/40" />
+          <span className="text-[11px] text-muted-foreground/60">{typingLabel}</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { createDailyRoom, createMeetingToken } from '@/lib/daily'
 
 /** Helper to get or create profile ID from Clerk userId */
 async function getOrCreateProfileId(userId: string): Promise<string | null> {
@@ -88,6 +89,12 @@ export async function GET(request: NextRequest) {
         color,
         created_by,
         created_at,
+        call_id,
+        calls:call_id (
+          id,
+          daily_room_url,
+          status
+        ),
         event_participants (
           id,
           user_id,
@@ -114,27 +121,38 @@ export async function GET(request: NextRequest) {
     }
 
     // Normalize participants shape (Supabase returns nested arrays for relations)
-    const normalized = (events ?? []).map((e) => ({
-      id: e.id,
-      title: e.title,
-      description: e.description ?? null,
-      event_date: e.event_date,
-      start_time: e.start_time,
-      end_time: e.end_time,
-      color: e.color ?? null,
-      created_by: e.created_by ?? null,
-      created_at: e.created_at,
-      participants: (e.event_participants ?? []).map((p: { profiles?: unknown }) => {
-        const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
-        return profile
+    const normalized = (events ?? []).map((e) => {
+      const call = Array.isArray(e.calls) ? e.calls[0] : e.calls
+      return {
+        id: e.id,
+        title: e.title,
+        description: e.description ?? null,
+        event_date: e.event_date,
+        start_time: e.start_time,
+        end_time: e.end_time,
+        color: e.color ?? null,
+        created_by: e.created_by ?? null,
+        created_at: e.created_at,
+        call_id: e.call_id ?? null,
+        call: call
           ? {
-              id: (profile as { id: string }).id,
-              name: (profile as { name: string }).name,
-              avatar_url: (profile as { avatar_url: string | null }).avatar_url ?? null,
+              id: (call as { id: string }).id,
+              daily_room_url: (call as { daily_room_url: string }).daily_room_url,
+              status: (call as { status: string }).status,
             }
-          : null
+          : null,
+        participants: (e.event_participants ?? []).map((p: { profiles?: unknown }) => {
+          const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
+          return profile
+            ? {
+                id: (profile as { id: string }).id,
+                name: (profile as { name: string }).name,
+                avatar_url: (profile as { avatar_url: string | null }).avatar_url ?? null,
+              }
+            : null
         }).filter(Boolean),
-    }))
+      }
+    })
 
     return NextResponse.json(normalized)
   } catch (err) {
@@ -170,6 +188,7 @@ export async function POST(request: NextRequest) {
       endTime,
       color,
       participantIds = [],
+      attachCall = false,
     } = body
 
     if (!title || typeof title !== 'string' || !title.trim()) {
@@ -256,7 +275,71 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ id: newEvent.id, success: true })
+    // Create a video call if attachCall is true
+    let callId: string | undefined
+    let callUrl: string | undefined
+
+    if (attachCall) {
+      try {
+        // Create Daily room
+        const dailyRoom = await createDailyRoom()
+
+        // Insert call record into database
+        const { data: newCall, error: callInsertError } = await supabaseAdmin
+          .from('calls')
+          .insert({
+            daily_room_name: dailyRoom.name,
+            daily_room_url: dailyRoom.url,
+            title: title.trim(),
+            started_by: profileId,
+            calendar_event_id: newEvent.id,
+            status: 'active',
+          })
+          .select('id')
+          .single()
+
+        if (callInsertError || !newCall) {
+          console.error('Failed to create call record:', callInsertError)
+          // Event was created; continue without call
+        } else {
+          callId = newCall.id
+          callUrl = dailyRoom.url
+
+          // Update the calendar event with the call reference
+          await supabaseAdmin
+            .from('calendar_events')
+            .update({ call_id: newCall.id })
+            .eq('id', newEvent.id)
+
+          // Add all participants to the call
+          const callParticipantRows = Array.from(allParticipantIds).map((uid) => ({
+            call_id: newCall.id,
+            user_id: uid,
+          }))
+
+          if (callParticipantRows.length > 0) {
+            const { error: callParticipantsError } = await supabaseAdmin
+              .from('call_participants')
+              .insert(callParticipantRows)
+
+            if (callParticipantsError) {
+              console.error('Failed to add call participants:', callParticipantsError)
+              // Call was created; continue but log the error
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to create Daily room for calendar event:', error)
+        // Event was created; continue without call
+      }
+    }
+
+    return NextResponse.json({
+      id: newEvent.id,
+      success: true,
+      call_id: callId,
+      call_url: callUrl,
+    })
   } catch (err) {
     console.error('POST /api/calendar/events error:', err)
     return NextResponse.json(

@@ -76,6 +76,12 @@ export async function GET(
         color,
         created_by,
         created_at,
+        call_id,
+        calls:call_id (
+          id,
+          daily_room_url,
+          status
+        ),
         event_participants (
           id,
           user_id,
@@ -123,6 +129,8 @@ export async function GET(
       }
     ).filter(Boolean)
 
+    const call = Array.isArray(event.calls) ? event.calls[0] : event.calls
+
     const normalized = {
       id: event.id,
       title: event.title,
@@ -133,6 +141,14 @@ export async function GET(
       color: event.color ?? null,
       created_by: event.created_by ?? null,
       created_at: event.created_at,
+      call_id: event.call_id ?? null,
+      call: call
+        ? {
+            id: (call as { id: string }).id,
+            daily_room_url: (call as { daily_room_url: string }).daily_room_url,
+            status: (call as { status: string }).status,
+          }
+        : null,
       participants,
     }
 
