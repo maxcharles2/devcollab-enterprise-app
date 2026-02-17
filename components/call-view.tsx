@@ -61,6 +61,14 @@ function getInitials(name: string): string {
 }
 
 /**
+ * Props for the CallView component
+ */
+interface CallViewProps {
+  /** Optional call ID to join an existing call (e.g., from calendar event) */
+  callId?: string
+}
+
+/**
  * Main CallView component that orchestrates the call flow.
  * 
  * States:
@@ -70,7 +78,7 @@ function getInitials(name: string): string {
  * 4. IN_CALL - Video grid with controls
  * 5. POST_CALL - Summary view
  */
-export function CallView() {
+export function CallView({ callId }: CallViewProps) {
   const [viewState, setViewState] = useState<CallViewState>("idle")
   const [callData, setCallData] = useState<CallData | null>(null)
   const [error, setError] = useState<CallError | null>(null)
@@ -82,6 +90,13 @@ export function CallView() {
   useEffect(() => {
     setError(null)
   }, [viewState])
+
+  // Auto-join existing call when callId is provided
+  useEffect(() => {
+    if (callId && viewState === "idle") {
+      handleJoinExisting(callId)
+    }
+  }, [callId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start call button handler - transitions to pre-call lobby
   const handleStartCall = useCallback(() => {

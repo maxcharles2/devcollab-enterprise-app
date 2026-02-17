@@ -30,7 +30,7 @@ export type View =
   | { type: "channel"; id: string }
   | { type: "chat"; id: string }
   | { type: "calendar" }
-  | { type: "call" }
+  | { type: "call"; callId?: string }
 
 interface Channel {
   id: string

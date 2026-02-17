@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getWeekDays } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
+import type { View } from "@/components/app-sidebar"
 
 const hours = Array.from({ length: 11 }, (_, i) => i + 8) // 8 AM to 6 PM
 
@@ -132,12 +133,14 @@ function getDefaultTimes(): { start: string; end: string } {
 
 interface CalendarViewProps {
   currentUserProfileId?: string | null
+  onNavigate?: (view: View) => void
 }
 
-export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
+export function CalendarView({ currentUserProfileId, onNavigate }: CalendarViewProps) {
   const [weekStart, setWeekStart] = useState("2026-02-09")
   const [showModal, setShowModal] = useState(false)
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [editingEventCallId, setEditingEventCallId] = useState<string | null>(null)
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [events, setEvents] = useState<CalendarEvent[]>([])
@@ -268,6 +271,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
         attachCall: !!data.call_id,
       })
       setEditingEventId(ev.id)
+      setEditingEventCallId(data.call_id ?? null)
       setShowModal(true)
     } catch {
       toast.error("Failed to load event")
@@ -277,6 +281,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
   function closeModal() {
     setShowModal(false)
     setEditingEventId(null)
+    setEditingEventCallId(null)
   }
 
   async function onSubmit(values: EventFormValues) {
@@ -615,9 +620,26 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
                         </FormControl>
                       </div>
                       {editingEventId && field.value && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Video call already attached to this event
-                        </p>
+                        <div className="mt-2">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Video call already attached to this event
+                          </p>
+                          {editingEventCallId && onNavigate && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="gap-1.5 w-full"
+                              onClick={() => {
+                                closeModal()
+                                onNavigate({ type: "call", callId: editingEventCallId })
+                              }}
+                            >
+                              <Video className="h-4 w-4" />
+                              Join Call
+                            </Button>
+                          )}
+                        </div>
                       )}
                       <FormMessage />
                     </FormItem>
