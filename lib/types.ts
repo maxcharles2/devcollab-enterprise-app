@@ -52,6 +52,15 @@ export interface CreateCalendarEventInput {
   endTime: string
   color?: string
   participantIds?: string[]
+  attachCall?: boolean
+}
+
+// Response from POST /api/calendar/events
+export interface CreateCalendarEventResponse {
+  id: string
+  success: boolean
+  call_id?: string
+  call_url?: string
 }
 
 // Input for PATCH /api/calendar/events/[id]

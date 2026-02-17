@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown, Trash2, Search } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Clock, X, Loader2, AlertCircle, Check, ChevronsUpDown, Trash2, Search, Video } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import {
   Form,
   FormControl,
@@ -62,6 +64,12 @@ interface CalendarEvent {
   color: string | null
   created_by: string | null
   participants?: { id: string; name: string; avatar_url: string | null }[]
+  call_id?: string | null
+  call?: {
+    id: string
+    daily_room_url: string
+    status: string
+  } | null
 }
 
 interface Profile {
@@ -78,6 +86,7 @@ const eventFormSchema = z.object({
   endTime: z.string().min(1, "End time is required"),
   color: z.string().optional(),
   participantIds: z.array(z.string()).default([]),
+  attachCall: z.boolean().default(false),
 }).refine((data) => {
   if (!data.startTime || !data.endTime) return true
   const [sh, sm] = data.startTime.split(":").map(Number)
@@ -151,6 +160,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
       endTime: defaultTimes.end,
       color: "bg-primary",
       participantIds: [],
+      attachCall: false,
     },
   })
 
@@ -233,6 +243,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
           endTime: getDefaultTimes().end,
           color: "bg-primary",
           participantIds: [],
+          attachCall: false,
         })
       }
     }
@@ -254,6 +265,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
         endTime: data.end_time,
         color: data.color ?? "bg-primary",
         participantIds: (data.participants ?? []).map((p: { id: string }) => p.id),
+        attachCall: !!data.call_id,
       })
       setEditingEventId(ev.id)
       setShowModal(true)
@@ -302,6 +314,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
             endTime: values.endTime,
             color: values.color || undefined,
             participantIds: values.participantIds,
+            attachCall: values.attachCall,
           }),
         })
         const data = await res.json()
@@ -309,7 +322,11 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
           toast.error(data.error ?? "Failed to create event")
           return
         }
-        toast.success("Meeting scheduled successfully")
+        if (values.attachCall && data.call_url) {
+          toast.success("Meeting scheduled with video call")
+        } else {
+          toast.success("Meeting scheduled successfully")
+        }
         closeModal()
       }
       fetchEvents()
@@ -439,6 +456,7 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
                       const topPx = (startH - 8) * 64 + (startM / 60) * 64
                       const heightPx = ((endH - startH) * 60 + (endM - startM)) / 60 * 64
                       const colorClass = ev.color || "bg-primary"
+                      const hasCall = !!ev.call_id
                       return (
                         <button
                           key={ev.id}
@@ -447,7 +465,10 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
                           style={{ top: `${topPx}px`, height: `${Math.max(heightPx, 24)}px` }}
                           onClick={() => openEventForEdit(ev)}
                         >
-                          <p className="truncate text-[11px] font-semibold leading-tight">{ev.title}</p>
+                          <div className="flex items-center gap-1">
+                            {hasCall && <Video className="h-3 w-3 shrink-0" />}
+                            <p className="truncate text-[11px] font-semibold leading-tight">{ev.title}</p>
+                          </div>
                           <p className="truncate text-[10px] opacity-80">
                             {ev.start_time} - {ev.end_time}
                           </p>
@@ -563,6 +584,41 @@ export function CalendarView({ currentUserProfileId }: CalendarViewProps) {
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="attachCall"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div className="flex items-center gap-3">
+                          <Video className="h-5 w-5 text-muted-foreground" />
+                          <div className="space-y-0.5">
+                            <Label htmlFor="attach-call" className="text-sm font-medium text-card-foreground cursor-pointer">
+                              Add video call
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Create a video meeting room for this event
+                            </p>
+                          </div>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            id="attach-call"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={editingEventId !== null}
+                          />
+                        </FormControl>
+                      </div>
+                      {editingEventId && field.value && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Video call already attached to this event
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
