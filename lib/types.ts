@@ -39,6 +39,8 @@ export interface CalendarEvent {
   created_by: string | null
   created_at: string
   participants: CalendarEventParticipant[]
+  call_id: string | null
+  call?: Call
 }
 
 // Input for POST /api/calendar/events
@@ -61,4 +63,53 @@ export interface UpdateCalendarEventInput {
   endTime?: string
   color?: string
   participantIds?: string[]
+}
+
+// Call participant (from call_participants table)
+export interface CallParticipant {
+  id: string
+  user_id: string
+  joined_at: string
+  left_at: string | null
+  user?: {
+    id: string
+    name: string
+    avatar_url: string | null
+  }
+}
+
+// Call session (from calls table)
+export interface Call {
+  id: string
+  daily_room_name: string
+  daily_room_url: string
+  title: string | null
+  started_by: string | null
+  calendar_event_id: string | null
+  chat_id: string | null
+  status: 'active' | 'ended'
+  started_at: string
+  ended_at: string | null
+  created_at: string
+  participants?: CallParticipant[]
+  starter?: {
+    id: string
+    name: string
+    avatar_url: string | null
+  }
+}
+
+// Input for POST /api/calls
+export interface CreateCallInput {
+  title?: string
+  participantIds: string[]
+  calendarEventId?: string
+  chatId?: string
+}
+
+// Response from POST /api/calls
+export interface CreateCallResponse {
+  id: string
+  roomUrl: string
+  token: string
 }
