@@ -7,6 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Circle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ApiMessage } from "@/lib/types"
+import { useRealtimeMessages, type MessageRow } from "@/hooks/use-realtime-messages"
+import { useTypingIndicator } from "@/hooks/use-typing-indicator"
 
 interface ChatParticipant {
   id: string
@@ -42,9 +44,58 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
+function messageRowToApiMessage(row: MessageRow, participants: ChatParticipant[]): ApiMessage {
+  const sender = participants.find((p) => p.id === row.sender_id)
+  return {
+    id: row.id,
+    content: row.content,
+    created_at: row.created_at,
+    sender: sender
+      ? { id: sender.id, name: sender.name, avatar_url: sender.avatar_url }
+      : { id: row.sender_id, name: "Unknown", avatar_url: null },
+    file_attachment: null,
+  }
+}
+
 export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) {
   const [messages, setMessages] = useState<ApiMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const participants = chat?.participants ?? []
+
+  const { typingUsersArray, sendTyping, clearTyping, isAnyoneTyping } = useTypingIndicator(
+    chatId,
+    currentUserProfileId ?? null,
+    participants.find((p) => p.id === currentUserProfileId)?.name ?? null
+  )
+
+  useRealtimeMessages(chatId, {
+    onInsert: (message) => {
+      if (message.sender_id === currentUserProfileId) return
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) return prev
+        const apiMsg = messageRowToApiMessage(message, participants)
+        return [...prev, apiMsg]
+      })
+    },
+    onUpdate: (message) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === message.id ? { ...m, content: message.content } : m
+        )
+      )
+    },
+    onDelete: (oldMessage) => {
+      if (oldMessage.id) {
+        setMessages((prev) => prev.filter((m) => m.id !== oldMessage.id))
+      }
+    },
+  })
+
+  const typingLabel = isAnyoneTyping
+    ? typingUsersArray.map((u) => u.userName).join(", ") +
+      (typingUsersArray.length === 1 ? " is" : " are") +
+      " typing..."
+    : null
 
   const fetchMessages = useCallback(async () => {
     setLoading(true)
@@ -77,9 +128,10 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
       if (!res.ok) {
         throw new Error("Failed to send message")
       }
+      clearTyping()
       await fetchMessages()
     },
-    [chatId, fetchMessages]
+    [chatId, fetchMessages, clearTyping]
   )
 
   const handleSendError = useCallback((err: unknown) => {
@@ -114,7 +166,6 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
     [fetchMessages]
   )
 
-  const participants = chat?.participants ?? []
   const displayName =
     chat?.name ??
     (!chat?.isGroup && currentUserProfileId
@@ -170,7 +221,13 @@ export function ChatView({ chatId, chat, currentUserProfileId }: ChatViewProps) 
           onDelete={handleDelete}
         />
       )}
-      <MessageInput placeholder={chat ? `Message ${displayName}...` : "Type a message..."} onSend={handleSend} onError={handleSendError} />
+      <MessageInput
+        placeholder={chat ? `Message ${displayName}...` : "Type a message..."}
+        onSend={handleSend}
+        onError={handleSendError}
+        onTyping={sendTyping}
+        typingLabel={typingLabel}
+      />
     </div>
   )
 }
