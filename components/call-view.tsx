@@ -124,20 +124,52 @@ export function CallView() {
 
   // Join call handler from pre-call lobby
   const handleJoinCall = useCallback(
-    async (options: { startVideoOff: boolean; startAudioOff: boolean }) => {
+    async (options: { 
+      startVideoOff: boolean
+      startAudioOff: boolean
+      participants: ParticipantPreview[]
+    }) => {
+      // Update selected participants from the lobby
+      setSelectedParticipants(options.participants)
       setViewState("joining")
       
       // Create the call if we don't have call data yet
-      const data = callData || (await createCall())
-      if (!data) {
-        setViewState("idle")
-        return
-      }
+      // Use updated participant list for the API call
+      try {
+        const response = await fetch("/api/calls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "Video Call",
+            participantIds: options.participants.map((p) => p.id),
+          }),
+        })
 
-      setCallData(data)
-      setViewState("in-call")
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Failed to create call: ${response.status}`)
+        }
+
+        const data: CreateCallResponse = await response.json()
+        const newCallData = {
+          id: data.id,
+          roomUrl: data.roomUrl,
+          token: data.token,
+          title: "Video Call",
+        }
+        
+        setCallData(newCallData)
+        setViewState("in-call")
+      } catch (err) {
+        console.error("[CallView] Failed to create call:", err)
+        setError({
+          message: err instanceof Error ? err.message : "Failed to create call",
+          code: "CREATE_CALL_ERROR",
+        })
+        setViewState("idle")
+      }
     },
-    [callData, createCall]
+    []
   )
 
   // Cancel pre-call - go back to idle
